@@ -5,7 +5,6 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchPatients, fetchDoctorDetails, addPatient, updatePatient, deletePatient } from '../../store/slices/doctorSlice';
 import PatientTable from '../../components/doctor/PatientTable';
 import PatientForm from '../../components/doctor/PatientForm';
-import PatientSoundUpload from '../PatientSoundUpload';
 import { Patient } from '../../types/patient';
 
 const DoctorDashboard = () => {
@@ -86,14 +85,9 @@ const DoctorDashboard = () => {
       });
   };
 
-  // const handleUpload = () => {
-  //   toast.success('Upload functionality not implemented yet');
-  // };
   const handleUpload = () => {
     window.open("http://127.0.0.1:5000/", "_blank");
   };
-
-
 
   const filteredPatients = patients.filter(patient =>
     `${patient.firstName} ${patient.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
@@ -107,7 +101,6 @@ const DoctorDashboard = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">
             Welcome, Dr. {doctor ? `${doctor.firstName} ${doctor.lastName}` : 'Loading...'}
-
           </h1>
         </div>
 
@@ -154,9 +147,10 @@ const DoctorDashboard = () => {
           />
         </div>
 
+        {/* Scrollable Add/Edit Patient Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">{isEditing ? 'Edit Patient' : 'Add New Patient'}</h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-500">
@@ -181,6 +175,7 @@ const DoctorDashboard = () => {
           </div>
         )}
 
+        {/* Confirm Delete Modal */}
         {isDeleteModalOpen && (
           <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-md w-full">
