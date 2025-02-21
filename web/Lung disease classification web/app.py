@@ -1,73 +1,61 @@
-from flask import Flask, render_template, request
+from flask import Flask, request, render_template
 import librosa
-from flask import Flask, render_template, request, redirect, flash
 import numpy as np
-from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, BatchNormalization, GRU, Dense, Dropout, concatenate
-from tensorflow.keras.models import Model
-from tensorflow.keras.initializers import Orthogonal
+import tensorflow as tf
 
-app = Flask(__name__)
 
-classes = ["COPD", "Bronchiolitis", "Pneumonia", "URTI", "Healthy"]
+# ======================
+# 1. Configuration
+# ======================
+MODEL_PATH = "C:\Ojas\Final-year-project\web\Lung disease classification web\lung_sound_model.keras"
+CLASSES = ["COPD", "Bronchiolitis", "Pneumonia", "URTI", "Healthy"]
+N_MFCC = 128
+MAX_TIMESTEPS = 500  # Match the training pipeline
 
-# Custom GRU cell with Orthogonal initializer
-def custom_gru(units):
-    return GRU(units, recurrent_initializer=Orthogonal())
+# ======================
+# 2. Load Model
+# ======================
+model = tf.keras.models.load_model(MODEL_PATH)
 
-# Define the model architecture
-def build_model(input_shape, num_classes):
-    Input_Sample = Input(shape=input_shape)
-
-    model_conv = Conv1D(256, kernel_size=5, strides=1, padding='same', activation='relu')(Input_Sample)
-    model_conv = MaxPooling1D(pool_size=2, strides=2, padding='same')(model_conv)
-    model_conv = BatchNormalization()(model_conv)
-
-    model_gru_1 = GRU(128, return_sequences=True, activation='tanh', go_backwards=True)(model_conv)
-
-    model_concat = concatenate([model_conv, model_gru_1])
-
-    model_dense_1 = Dense(128, activation='relu')(model_concat)
-    model_output = Dense(num_classes, activation='softmax')(model_dense_1)
-
-    model = Model(inputs=Input_Sample, outputs=model_output)
-    return model
-
-# Function for loading and predicting with the model
-def predict_class(model, classes, uploaded_file, features=52):
-    if uploaded_file is not None:
-        # Load audio data using librosa
-        data_x, sampling_rate = librosa.load(uploaded_file, res_type='kaiser_fast')
-        # Extract features
-        mfccs = np.mean(librosa.feature.mfcc(y=data_x, sr=sampling_rate, n_mfcc=features).T, axis=0)
-        # Reshape input data to match model's input shape
-        val = np.expand_dims(np.expand_dims(mfccs, axis=0), axis=0)
-        # Perform prediction
-        prediction = classes[np.argmax(model.predict(val))]
-        return prediction
+def preprocess_audio(audio_path):
+    """Preprocess audio for model prediction"""
+    y, sr = librosa.load(audio_path, sr=None)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=N_MFCC)
+    
+    if mfcc.shape[1] < MAX_TIMESTEPS:
+        mfcc = np.pad(mfcc, ((0, 0), (0, MAX_TIMESTEPS - mfcc.shape[1])), mode='constant')
     else:
-        return "No file uploaded"
+        mfcc = mfcc[:, :MAX_TIMESTEPS]
+    
+    return mfcc.T[np.newaxis, ...]  # Add batch dimension
 
+def predict_class(uploaded_file):
+    """Predict lung disease class from uploaded audio file"""
+    if uploaded_file:
+        processed_audio = preprocess_audio(uploaded_file)
+        prediction = model.predict(processed_audio)
+        return CLASSES[np.argmax(prediction)]
+    return "No file uploaded"
+
+# ======================
+# 3. Flask App
+# ======================
+app = Flask(__name__)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # Load the model when the server starts
-    model = build_model((None, 52), len(classes))
-    model.load_weights(r"C:/Ojas/Final-year-project/web/Lung disease classification web/lung_model.h5")
-
+    prediction = None
     if request.method == 'POST':
-        # Check if the post request has the file part
         if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
+            return "No file part"
         file = request.files['file']
         if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
+            return "No selected file"
         if file:
-            # Process uploaded file and get prediction
-            prediction = predict_class(model, classes, file)
-            return render_template('index.html', prediction=prediction)
-    return render_template('index.html', prediction=None)
+            prediction = predict_class(file)
+    return render_template('index.html', prediction=prediction)
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
